@@ -178,6 +178,35 @@
                     </button>
                 </div>
             </div>
+
+            <!-- AI Agent Console for Autonomous Defense -->
+            <div class="ai-agent-section">
+                <div class="ai-agent-header">
+                    <div class="agent-title">
+                        <i class="fas fa-robot"></i>
+                        <h3>AI Autonomous Defense Agent</h3>
+                    </div>
+                    <div class="agent-status-badge">
+                        <span class="status-dot green"></span>
+                        <span id="agent-status-text">AGENT STANDBY</span>
+                    </div>
+                </div>
+                <div class="ai-agent-console">
+                    <div id="ai-agent-logs" class="agent-logs">
+                        <p class="console-placeholder">Waiting for critical fire detection event...</p>
+                    </div>
+                    <div class="agent-controls">
+                        <div class="phone-input-group">
+                            <label for="agent-phone">Emergency Responder Phone (Demo):</label>
+                            <input type="text" id="agent-phone" placeholder="+91XXXXXXXXXX" value="+91">
+                        </div>
+                        <button class="agent-test-btn" onclick="triggerAIAgentDemo()">
+                            <i class="fas fa-paper-plane"></i>
+                            Manual Dispatch Test
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Data Sources Tab -->

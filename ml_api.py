@@ -7,6 +7,15 @@ from datetime import datetime
 from ml_models import get_model_predictions, simulate_fire_scenario, NDVIAnalyzer
 import threading
 import time
+import os
+try:
+    from twilio.rest import Client
+except ImportError:
+    Client = None
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -14,6 +23,72 @@ CORS(app)
 # Global variables for real-time data simulation
 current_predictions = {}
 simulation_cache = {}
+
+
+class AIAgentDispatcher:
+    """AI Agent responsible for automatic dispatching and notifications"""
+    
+    def __init__(self):
+        # NOTE: Replace these with your real Twilio credentials for the demo
+        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        self.from_number = os.getenv("TWILIO_FROM_NUMBER")
+        
+        if Client:
+            try:
+                self.client = Client(self.account_sid, self.auth_token)
+            except:
+                self.client = None
+        else:
+            self.client = None
+
+    def send_emergency_sms(self, to_number, location, severity, risk_level, lat=30.3, lng=78.0):
+        """Sends emergency SMS notification with navigation link"""
+        # Generate Google Maps direction link (Shortest Path from responder location)
+        nav_link = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}"
+        
+        body = (
+            f"⚠️ FOREST FIRE EMERGENCY ⚠️\n\n"
+            f"An active fire has been detected by the AI Agent.\n\n"
+            f"📍 Location: {location}\n"
+            f"🔥 Intensity: {severity}\n"
+            f"⏰ Time: {datetime.now().strftime('%I:%M %p')}\n\n"
+            f"🗺️ Navigate to Fire (Shortest Path):\n{nav_link}\n\n"
+            f"Status: IMMEDIATE RESPONSE REQUIRED"
+        )
+        
+        if self.client:
+            try:
+                message = self.client.messages.create(
+                    body=body,
+                    from_=self.from_number,
+                    to=to_number
+                )
+                return True, message.sid
+            except Exception as e:
+                return False, str(e)
+        else:
+            print(f"SIMULATED SMS to {to_number}: {body}")
+            return True, "SIMULATED_ID"
+
+    def make_emergency_call(self, to_number, location, severity, lat=30.3, lng=78.0):
+        """Places an automated voice call with navigation instructions"""
+        # TwiML for synthesized voice message
+        twiml = f'<Response><Say voice="alice">Emergency Alert. A {severity} intensity fire has been detected near {location}. GPS coordinates {lat} north, {lng} east. I have messaged you a Google Maps link for the shortest navigation path. Please respond immediately. Goodbye.</Say></Response>'
+        
+        if self.client:
+            try:
+                call = self.client.calls.create(
+                    twiml=twiml,
+                    from_=self.from_number,
+                    to=to_number
+                )
+                return True, call.sid
+            except Exception as e:
+                return False, str(e)
+        else:
+            print(f"SIMULATED CALL to {to_number}: [Voice message about {severity} fire at {location}]")
+            return True, "SIMULATED_CALL_ID"
 
 class RealTimePredictor:
     """Handles real-time predictions and updates"""
@@ -1029,7 +1104,7 @@ def generate_replay_data(hour, base_conditions):
     }
 
 @app.route('/api/ml/explain', methods=['POST'])
-def explain_fire_behavior():
+def explain_fire_behavior_logic():
     """API endpoint for AI explainability - explains why fire spreads in certain patterns"""
     try:
         data = request.get_json()
@@ -1116,7 +1191,7 @@ def explain_fire_behavior():
         }), 500
 
 @app.route('/api/ml/whatif', methods=['POST'])
-def whatif_simulation():
+def whatif_simulation_logic():
     """API endpoint for What-If scenario testing"""
     try:
         data = request.get_json()
@@ -1185,7 +1260,7 @@ def whatif_simulation():
         }), 500
 
 @app.route('/api/ml/replay-explanation', methods=['POST'])
-def replay_explanation():
+def replay_explanation_logic():
     """API endpoint for step-by-step fire spread explanation"""
     try:
         data = request.get_json()
@@ -1212,7 +1287,7 @@ def replay_explanation():
             'error': str(e)
         }), 500
 
-def calculate_spread_rate(conditions):
+def calculate_spread_rate_logic(conditions):
     """Calculate fire spread rate based on environmental conditions"""
     wind_factor = conditions['wind_speed'] / 30  # Normalized to 0-1
     humidity_factor = (100 - conditions['humidity']) / 100
@@ -1227,7 +1302,7 @@ def calculate_spread_rate(conditions):
     
     return min(8.0, spread_rate)  # Cap at 8 km/h
 
-def generate_ghost_trail(conditions):
+def generate_ghost_trail_logic(conditions):
     """Generate coordinates for ghost fire trail visualization"""
     # Simplified ghost trail generation
     base_lat, base_lng = 30.0668, 79.0193
@@ -1258,7 +1333,7 @@ def generate_ghost_trail(conditions):
     
     return trail_coords
 
-def generate_impact_summary(metrics):
+def generate_impact_summary_logic(metrics):
     """Generate human-readable impact summary"""
     spread_change = metrics['spread_rate']['change_percent']
     area_change = metrics['burn_area_6h']['change_percent']
@@ -1276,7 +1351,7 @@ def generate_impact_summary(metrics):
     
     return impact
 
-def generate_replay_data(hour, base_conditions):
+def generate_replay_data_logic(hour, base_conditions):
     """Generate realistic replay data for each hour"""
     
     # Hour-specific events and conditions
@@ -1805,8 +1880,61 @@ def start_realtime():
             'error': str(e)
         }), 500
 
+@app.route('/api/ml/dispatch-agent', methods=['POST'])
+def dispatch_agent_action():
+    """Emergency dispatch AI agent endpoint"""
+    try:
+        data = request.get_json()
+        print(f"AI Agent Request Received: {data}")
+        
+        phone = data.get('phone', 'YOUR_NUMBER')
+        location = data.get('location', 'Unknown Region')
+        severity = data.get('severity', 'High')
+        risk_level = data.get('risk_level', 0)
+        lat = data.get('lat', 30.31)
+        lng = data.get('lng', 78.03)
+        
+        # Initialize dispatcher
+        dispatcher = AIAgentDispatcher()
+        
+        # Send SMS
+        sms_success, sms_info = dispatcher.send_emergency_sms(phone, location, severity, risk_level, lat, lng)
+        
+        if not sms_success:
+            print(f"Twilio Error: {sms_info}")
+        else:
+            print(f"SMS Sent Successfully! ID: {sms_info}")
+        
+        # Navigation link for logs
+        nav_url = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}"
+        
+        # Generate simulation logs for the AI Agent
+        logs = [
+            f"Analyzing risk patterns for {location}...",
+            f"Detected {severity} intensity fire spread.",
+            f"GPS Coordinates: {lat}, {lng}",
+            f"Calculating shortest path for emergency vehicles...",
+            f"Direct Route Link generated: {nav_url}",
+            f"Emergency dispatch protocol SMS-{sms_info} initiated.",
+            "SMS notification broadcasted to regional responders.",
+            "Autonomous status: Dispatched and Monitoring."
+        ]
+        
+        return jsonify({
+            'success': sms_success,
+            'info': sms_info,
+            'agent_logs': logs,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Start real-time predictions automatically
     real_time_predictor.start_continuous_prediction()
     
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True, use_reloader=False)

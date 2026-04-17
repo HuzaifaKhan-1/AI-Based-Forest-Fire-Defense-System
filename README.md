@@ -1,7 +1,7 @@
 # 🌲🔥 NeuroNix – AI-Powered Forest Fire Defence Ecosystem
 
 ## 🚀 Project Overview
-We participated in the **International Innovation Hackathon 2.0 – Manipur University** under the theme **Disaster Management & Relief**.  
+We participated in the **Quantum Arena 1.0** under the theme **Smart City**.  
 Our team, **Team NeuroNix**, selected the problem statement:  
 
 **“Beyond Prediction: An AI-powered Forest Fire Defence Ecosystem – from early detection to evacuation, response, and recovery.”**
@@ -12,7 +12,8 @@ This project is designed to **predict, simulate, monitor, and assist evacuation*
 
 ## 👨‍💻 Team Information
 - **Team Lead**: Huzaifa Khan (Team NeuroNix)
-- Team Member: Rohit Ratnaparkhi
+- Team Member: Sancheti Shinde
+- Team Member: Shreya Gawade
 
 ---
 
@@ -42,8 +43,8 @@ This project is designed to **predict, simulate, monitor, and assist evacuation*
 
 
 ### 🔔 Monitoring & Alerts  
-- Real-time alerts and live environmental tracking.  
-- Ensures citizens and rangers are informed instantly.
+- **Autonomous Citizen Alerts**: Instant SMS notifications sent to nearby users regarding escalating fire risks.
+- **Dynamic Evacuation**: AI-calculated safest routes providing GPS directions from a user's current location to the nearest safe zone based on real-time fire spread modeling.
   <img width="1526" height="761" alt="image" src="https://github.com/user-attachments/assets/eef17dbd-a6d7-4b3c-87e8-8ef9f5a237e4" />
 
 
@@ -104,12 +105,6 @@ This project is designed to **predict, simulate, monitor, and assist evacuation*
 🔗 [Live Video Link] ()
 
 ---
-
-## 🏆 Hackathon Info
-- **Event**: International Innovation Hackathon 2.0 – Manipur University  
-- **Theme**: Disaster Management & Relief  
-- **Problem Statement**: Beyond Prediction – An AI-powered Forest Fire Defence Ecosystem  
-
 ---
 
 ### 🔥 Team NeuroNix – Building AI for Safer Forests

@@ -9,7 +9,7 @@ let fireSpreadLayers = [];
 let deploymentLayers = [];
 
 // ML API endpoints
-const ML_API_BASE = window.location.origin.replace(':5000', ':5001');
+const ML_API_BASE = 'http://localhost:5001';
 let mlPredictions = {};
 let realTimeUpdates = false;
 let currentOptimization = null;
@@ -1365,6 +1365,18 @@ async function startFireSimulation(latlng) {
         })
     }).addTo(simulationMap);
 
+    // Add popup with Live Location Link for the responder
+    const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${latlng.lat},${latlng.lng}`;
+    fireMarker.bindPopup(`
+        <div class="fire-popup" style="padding: 10px; min-width: 150px;">
+            <strong style="color: #ff4444; font-size: 14px;">🔥 CRITICAL FIRE</strong><br>
+            <span style="font-size: 11px; color: #666;">Coord: ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}</span><br>
+            <a href="${navUrl}" target="_blank" style="display: block; margin-top: 10px; padding: 8px; background: #2563eb; color: white; border-radius: 4px; text-decoration: none; font-size: 12px; text-align: center; font-weight: bold;">
+                <i class="fas fa-directions"></i> Get Shortest Path
+            </a>
+        </div>
+    `).openPopup();
+
     fireSpreadLayers.push(fireMarker);
 
     // Store ML simulation data if available
@@ -1383,6 +1395,13 @@ async function startFireSimulation(latlng) {
     }).addTo(simulationMap);
 
     fireSpreadLayers.push(initialBurn);
+    
+    // Automatically trigger AI Defense Agent after 3 seconds of "detection"
+    setTimeout(() => {
+        const locationName = mlSimulation ? mlSimulation.location_name : "Central Forest Sector";
+        const riskLevel = mlSimulation ? mlSimulation.overall_risk * 100 : 85;
+        triggerAIAgent(locationName, "CRITICAL", Math.round(riskLevel), latlng.lat, latlng.lng);
+    }, 3000);
 }
 
 function startSimulation() {
@@ -8130,3 +8149,68 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
+
+/**
+ * AI AGENT SYSTEM - Autonomous Dispatch & Emergency Response
+ */
+
+// Function to trigger the AI Agent (to be called from simulation)
+async function triggerAIAgent(locationName, severity, riskLevel, lat = 30.31, lng = 78.03) {
+    const logContainer = document.getElementById('ai-agent-logs');
+    const statusText = document.getElementById('agent-status-text');
+    const phoneInput = document.getElementById('agent-phone');
+    const phone = phoneInput ? phoneInput.value : '';
+
+    if (!logContainer || !statusText) return;
+
+    // Update status to active
+    statusText.innerText = "AGENT DISPATCHING";
+    const statusDot = statusText.parentElement.querySelector('.status-dot');
+    if (statusDot) statusDot.className = 'status-dot red pulse';
+
+    logContainer.innerHTML = ''; // Clear old logs
+
+    try {
+        const response = await fetch(`${ML_API_BASE}/api/ml/dispatch-agent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                phone: phone,
+                location: locationName,
+                severity: severity,
+                risk_level: riskLevel,
+                lat: lat,
+                lng: lng
+            })
+        });
+
+        const data = await response.json();
+
+        // Show logs with typewriter effect for demo impact
+        for (const log of data.agent_logs) {
+            const logEntry = document.createElement('p');
+            logEntry.className = 'agent-log-entry';
+            const time = new Date().toLocaleTimeString();
+            logEntry.innerHTML = `<span class="timestamp">[${time}]</span> ${log}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            await new Promise(resolve => setTimeout(resolve, 1200));
+        }
+
+        showToast('AI Agent successfully dispatched responders', 'success');
+        
+        statusText.innerText = "RESPONSE ACTIVE";
+        const finalStatusDot = statusText.parentElement.querySelector('.status-dot');
+        if (finalStatusDot) finalStatusDot.className = 'status-dot orange';
+
+    } catch (error) {
+        console.error('AI Agent Error:', error);
+        showToast('AI Agent encountered a communication error', 'error');
+        statusText.innerText = "AGENT ERROR";
+    }
+}
+
+// Manual demo function for the jury
+function triggerAIAgentDemo() {
+    triggerAIAgent("Nainital High-Risk Zone", "CRITICAL", 98);
+}

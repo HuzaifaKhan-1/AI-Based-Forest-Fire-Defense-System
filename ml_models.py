@@ -106,9 +106,9 @@ class ConvLSTMUNetModel:
         
         # ConvLSTM branch for temporal patterns
         convlstm = layers.ConvLSTM2D(
-            filters=32, kernel_size=3, padding='same', 
+            filters=64, kernel_size=3, padding='same', 
             return_sequences=False, activation='tanh'
-        )(tf.expand_dims(spatial_input, axis=1))
+        )(layers.Lambda(lambda x: tf.expand_dims(x, axis=1))(spatial_input))
         
         # UNet-style encoder
         conv1 = layers.Conv2D(64, 3, activation='relu', padding='same')(spatial_input)
