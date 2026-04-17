@@ -267,6 +267,13 @@ function initializeTabNavigation() {
             const targetContent = document.getElementById(targetTab);
             if (targetContent) {
                 targetContent.classList.add('active');
+                
+                // Fix for Leaflet maps rendering as grey boxes in hidden tabs
+                if (targetTab === 'evacuation-routes' && typeof evacuationMap !== 'undefined' && evacuationMap) {
+                    setTimeout(() => {
+                        evacuationMap.invalidateSize();
+                    }, 50);
+                }
             }
         });
     });
@@ -5444,78 +5451,206 @@ function setupEvacuationEventListeners() {
 }
 
 function findMyRoute() {
-    showToast('Finding safest evacuation route...', 'processing', 3000);
+    showToast('Locating your position...', 'processing', 2000);
     
-    // Simulate getting user location
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                const userCoords = [position.coords.latitude, position.coords.longitude];
-                calculateEvacuationRoute(userCoords);
+                let userLat = position.coords.latitude;
+                let userLng = position.coords.longitude;
+                
+                showToast('Location confirmed. Scanning for nearby shelters...', 'success', 3000);
+                setUserLocation({lat: userLat, lng: userLng});
             },
-            () => {
-                // Fallback to center of map if geolocation fails
-                const center = evacuationMap.getCenter();
-                calculateEvacuationRoute([center.lat, center.lng]);
+            (error) => {
+                showToast('GPS access denied. Please enable location permissions.', 'error', 4000);
             }
         );
     } else {
-        const center = evacuationMap.getCenter();
-        calculateEvacuationRoute([center.lat, center.lng]);
+        showToast('Your browser does not support geolocation.', 'error', 3000);
     }
 }
 
-function calculateEvacuationRoute(startCoords) {
+async function fetchDynamicSafeZones(lat, lng) {
+    showToast('Scanning surroundings for safe grounds & shelters...', 'processing', 3000);
+    // Search within 25km (25000 meters)
+    const radius = 25000;
+    const query = `
+        [out:json];
+        (
+          node[\"amenity\"~\"hospital|clinic|school|college|university|community_centre\"](around:${radius},${lat},${lng});
+          way[\"amenity\"~\"hospital|clinic|school|college|university|community_centre\"](around:${radius},${lat},${lng});
+          node[\"leisure\"~\"pitch|park|stadium|sports_centre\"](around:${radius},${lat},${lng});
+          way[\"leisure\"~\"pitch|park|stadium|sports_centre\"](around:${radius},${lat},${lng});
+          node[\"landuse\"=\"recreation_ground\"](around:${radius},${lat},${lng});
+          way[\"landuse\"=\"recreation_ground\"](around:${radius},${lat},${lng});
+        );
+        out center 15;
+    `;
+    try {
+        const response = await fetch(`https://overpass-api.de/api/interpreter`, {
+            method: 'POST',
+            body: query
+        });
+        const data = await response.json();
+        
+        let zones = [];
+        if (data.elements) {
+            data.elements.forEach(el => {
+                const zLat = el.lat || el.center.lat;
+                const zLon = el.lon || el.center.lon;
+                const name = (el.tags && el.tags.name) ? el.tags.name : (el.tags.amenity || el.tags.leisure || el.tags.landuse || 'Safe Shelter').toUpperCase();
+                let type = 'shelter';
+                if (el.tags) {
+                    if (el.tags.amenity && (el.tags.amenity.includes('hospital') || el.tags.amenity.includes('clinic'))) type = 'hospital';
+                    else if (el.tags.amenity && (el.tags.amenity.includes('school') || el.tags.amenity.includes('college') || el.tags.amenity.includes('university'))) type = 'school';
+                    else if (el.tags.leisure || el.tags.landuse) type = 'ground';
+                }
+                zones.push({
+                    name: name,
+                    coords: [zLat, zLon],
+                    type: type
+                });
+            });
+        }
+        return zones;
+    } catch (e) {
+        console.error('Overpass API Error:', e);
+        return [];
+    }
+}
+
+async function calculateEvacuationRoute(startCoords) {
     if (!evacuationMap) return;
 
     // Clear existing routes
     clearCurrentRoutes();
 
-    // Find nearest safe zone
-    const nearestSafeZone = findNearestSafeZone(startCoords);
+    // 1. Dynamically fetch nearby safe zones
+    let safeZones = await fetchDynamicSafeZones(startCoords[0], startCoords[1]);
+    
+    // Fallback if network is down or nothing is found
+    if (!safeZones || safeZones.length === 0) {
+        showToast('No hospitals or schools found near your exact location.', 'error', 4000);
+        return;
+    }
+
+    // Update map with real dynamic safe zones
+    if (safeZoneMarkers && safeZoneMarkers.length > 0) {
+        safeZoneMarkers.forEach(marker => evacuationMap.removeLayer(marker));
+        safeZoneMarkers = [];
+    }
+    
+    safeZones.forEach(zone => {
+        const iconColor = zone.type === 'hospital' ? '#10B981' : (zone.type === 'ground' ? '#3B82F6' : '#F59E0B');
+        let faIcon = 'fa-home';
+        if (zone.type === 'hospital') faIcon = 'fa-hospital';
+        if (zone.type === 'school') faIcon = 'fa-school';
+        if (zone.type === 'ground') faIcon = 'fa-campground';
+        
+        const marker = L.marker(zone.coords, {
+            icon: L.divIcon({
+                className: 'safe-zone-marker',
+                html: `<div class=\"safe-zone-icon ${zone.type}\" style=\"background: ${iconColor};\">
+                          <i class=\"fas ${faIcon}\"></i>
+                       </div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            })
+        }).addTo(evacuationMap);
+        
+        marker.bindPopup(`
+            <div class=\"safe-zone-popup\">
+                <h4>${zone.name}</h4>
+                <p><strong>Type:</strong> ${zone.type.charAt(0).toUpperCase() + zone.type.slice(1)}</p>
+            </div>
+        `);
+        safeZoneMarkers.push(marker);
+    });
+
+    // 2. Find nearest from these dynamic ones
+    const nearestSafeZone = findNearestSafeZone(startCoords, safeZones);
+    
+    // Sort safe zones by distance and update the sidebar UI
+    safeZones.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+    updateSidebarSafeZones(safeZones);
     
     if (nearestSafeZone) {
-        // Create route visualization
-        const route = createRouteVisualization(startCoords, nearestSafeZone);
-        currentRoutes.push(route);
-
-        // Update sidebar information
-        updateRouteInformation(nearestSafeZone, route);
+        showToast(`Routing to nearest: ${nearestSafeZone.name}`, 'processing', 2000);
         
-        // Set map view to show route
+        try {
+            // OSRM API expects longitude,latitude
+            const startStr = `${startCoords[1]},${startCoords[0]}`;
+            const endStr = `${nearestSafeZone.coords[1]},${nearestSafeZone.coords[0]}`;
+            
+            const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${startStr};${endStr}?overview=full&geometries=geojson&steps=true`);
+            const data = await response.json();
+            
+            if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                const routeData = data.routes[0];
+                const waypoints = routeData.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                
+                // Update safe zone info
+                nearestSafeZone.distance = (routeData.distance / 1000).toFixed(1);
+                nearestSafeZone.eta = Math.ceil(routeData.duration / 60);
+                
+                // Create route visualization
+                const route = createRealRouteVisualization(startCoords, nearestSafeZone, waypoints);
+                currentRoutes.push(route);
+
+                // Update sidebar information
+                updateRouteInformation(nearestSafeZone, routeData.legs[0].steps);
+                
+                // Set map view to show route
+                const routeBounds = L.latLngBounds(waypoints);
+                evacuationMap.fitBounds(routeBounds, { padding: [50, 50] });
+
+                showToast(`Safe route to ${nearestSafeZone.name} calculated`, 'success');
+                startRouteMonitoring();
+                return;
+            }
+        } catch (error) {
+            console.error('OSRM API Error, falling back to direct route:', error);
+        }
+
+        // Fallback if API fails
+        const fallbackRoute = createRouteVisualization(startCoords, nearestSafeZone);
+        currentRoutes.push(fallbackRoute);
+        updateRouteInformation(nearestSafeZone, null);
         const routeBounds = L.latLngBounds([startCoords, nearestSafeZone.coords]);
         evacuationMap.fitBounds(routeBounds, { padding: [50, 50] });
-
-        showToast('Safe evacuation route calculated', 'success');
-        
-        // Simulate route monitoring
+        showToast('Direct evacuation route calculated', 'success');
         startRouteMonitoring();
     }
 }
 
-function findNearestSafeZone(userCoords) {
-    const safeZones = [
-        { name: 'District Hospital', coords: [30.1, 79.4], distance: 2.1, eta: 7, type: 'hospital' },
-        { name: 'Community Center', coords: [30.0, 79.3], distance: 2.3, eta: 8, type: 'shelter' },
-        { name: 'Sports Complex', coords: [30.2, 79.5], distance: 3.1, eta: 12, type: 'shelter' }
-    ];
-
-    // Calculate distances and return nearest available zone
-    return safeZones.reduce((nearest, zone) => {
-        if (!nearest || zone.distance < nearest.distance) {
-            return zone;
+function findNearestSafeZone(userCoords, safeZones) {
+    let nearest = null;
+    let minDistance = Infinity;
+    
+    // Using simple air distance approximation for nearest zone selection
+    const userLatLng = L.latLng(userCoords[0], userCoords[1]);
+    
+    safeZones.forEach(zone => {
+        const zoneLatLng = L.latLng(zone.coords[0], zone.coords[1]);
+        const distance = userLatLng.distanceTo(zoneLatLng);
+        
+        // Ensure distance and ETA are calculated for EVERY zone, so sorting doesn't fail
+        zone.distance = (distance / 1000).toFixed(1);
+        zone.eta = Math.ceil((distance / 1000) * 1.5); // Rough assuming 40 km/h
+        
+        if (distance < minDistance) {
+            minDistance = distance;
+            nearest = zone;
         }
-        return nearest;
     });
+
+    return nearest;
 }
 
-function createRouteVisualization(start, destination) {
+function createRealRouteVisualization(start, destination, waypoints) {
     if (!evacuationMap) return null;
 
-    // Create intermediate points for more realistic route
-    const waypoints = generateRouteWaypoints(start, destination.coords);
-    
-    // Create animated route line
     const routeLine = L.polyline(waypoints, {
         color: '#10B981',
         weight: 6,
@@ -5523,88 +5658,148 @@ function createRouteVisualization(start, destination) {
         className: 'evacuation-route-line'
     }).addTo(evacuationMap);
 
-    // Add pulsing effect to route
     setTimeout(() => {
-        routeLine.setStyle({
-            className: 'evacuation-route-line pulsing'
-        });
+        routeLine.setStyle({ className: 'evacuation-route-line pulsing' });
     }, 100);
 
-    // Add start marker
     const startMarker = L.marker(start, {
         icon: L.divIcon({
             className: 'route-marker start-marker',
-            html: '<i class="fas fa-map-marker-alt"></i>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 30]
+            html: '<i class=\"fas fa-map-marker-alt\"></i>',
+            iconSize: [30, 30], iconAnchor: [15, 30]
         })
     }).addTo(evacuationMap);
 
-    // Add destination marker
     const destMarker = L.marker(destination.coords, {
         icon: L.divIcon({
             className: 'route-marker dest-marker',
-            html: '<i class="fas fa-flag-checkered"></i>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 30]
+            html: '<i class=\"fas fa-flag-checkered\"></i>',
+            iconSize: [30, 30], iconAnchor: [15, 30]
         })
     }).addTo(evacuationMap);
 
     return {
-        line: routeLine,
-        startMarker: startMarker,
-        destMarker: destMarker,
-        waypoints: waypoints,
-        destination: destination
+        line: routeLine, startMarker, destMarker, waypoints, destination
     };
 }
 
+function createRouteVisualization(start, destination) {
+    if (!evacuationMap) return null;
+
+    const waypoints = generateRouteWaypoints(start, destination.coords);
+    return createRealRouteVisualization(start, destination, waypoints);
+}
+
 function generateRouteWaypoints(start, end) {
-    // Generate realistic waypoints between start and end
     const waypoints = [start];
-    
-    // Add intermediate points
     const latDiff = end[0] - start[0];
     const lngDiff = end[1] - start[1];
     
     for (let i = 1; i < 4; i++) {
         const progress = i / 4;
-        const waypoint = [
-            start[0] + latDiff * progress + (Math.random() - 0.5) * 0.01,
-            start[1] + lngDiff * progress + (Math.random() - 0.5) * 0.01
-        ];
-        waypoints.push(waypoint);
+        waypoints.push([
+            start[0] + latDiff * progress,
+            start[1] + lngDiff * progress
+        ]);
     }
-    
     waypoints.push(end);
     return waypoints;
 }
 
-function updateRouteInformation(safeZone, route) {
-    // Update ETA and distance
+function updateRouteInformation(safeZone, steps) {
     updateElementText('safe-zone-distance', safeZone.distance + ' km');
     updateElementText('evacuation-eta', safeZone.eta + ' mins');
 
-    // Update route safety status
     const safetyBadge = document.getElementById('route-safety');
     if (safetyBadge) {
         safetyBadge.className = 'route-safety-badge safe';
-        safetyBadge.innerHTML = '<i class="fas fa-check"></i> Safe';
+        safetyBadge.innerHTML = '<i class=\"fas fa-check\"></i> Safe';
     }
 
-    // Update route steps (simulated)
-    updateRouteSteps(safeZone);
+    updateRouteSteps(safeZone, steps);
 }
 
-function updateRouteSteps(destination) {
-    const routeSteps = [
-        { instruction: 'Head north on Main Road', distance: '0.8 km' },
-        { instruction: 'Turn right onto Highway 109', distance: '1.2 km' },
-        { instruction: `Arrive at ${destination.name}`, distance: '0.3 km' }
-    ];
+function updateSidebarSafeZones(safeZones) {
+    const listContainer = document.querySelector('.safe-zones-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = ''; 
+    
+    safeZones.slice(0, 4).forEach(zone => {
+        let faIcon = 'fa-home';
+        if (zone.type === 'hospital') faIcon = 'fa-hospital';
+        if (zone.type === 'school') faIcon = 'fa-school';
+        if (zone.type === 'ground') faIcon = 'fa-campground';
+        
+        let distanceText = zone.distance ? `${zone.distance} km` : 'Calculating...';
+        let etaText = zone.eta ? `${zone.eta} min drive` : '';
+        
+        listContainer.innerHTML += `
+            <div class=\"safe-zone-item\">
+                <div class=\"zone-icon ${zone.type}\">
+                    <i class=\"fas ${faIcon}\"></i>
+                </div>
+                <div class=\"zone-info\">
+                    <span class=\"zone-name\">${zone.name}</span>
+                    <span class=\"zone-details\">${distanceText} ${etaText ? '• ' + etaText : ''}</span>
+                    <span class=\"zone-capacity\">Type: ${zone.type.toUpperCase()}</span>
+                </div>
+                <div class=\"zone-status available\">
+                    <i class=\"fas fa-check\"></i>
+                </div>
+            </div>
+        `;
+    });
+}
 
-    // This would update the route steps in the sidebar
-    console.log('Route steps updated:', routeSteps);
+function updateRouteSteps(destination, steps) {
+    let routeSteps = [];
+    if (steps && steps.length > 0) {
+        routeSteps = steps.filter(step => step.distance > 0 || step.maneuver.type === 'arrive').map(step => {
+            const instruction = step.maneuver.instruction || 
+                `${step.maneuver.type} ${step.maneuver.modifier || ''} ${step.name ? 'onto ' + step.name : ''}`.trim();
+            return {
+                instruction: instruction,
+                distance: (step.distance / 1000).toFixed(1) + ' km'
+            };
+        });
+    } else {
+        routeSteps = [
+            { instruction: 'Head towards destination', distance: destination.distance + ' km' },
+            { instruction: `Arrive at ${destination.name}`, distance: '0 km' }
+        ];
+    }
+    
+    let sidebar = document.querySelector('.evacuation-sidebar');
+    if (!sidebar) return;
+    
+    let existingPanel = document.getElementById('gps-steps-panel');
+    if (existingPanel) existingPanel.remove();
+    
+    let stepsHtml = routeSteps.map((step, idx) => `
+        <div class=\"step-item\" style=\"display:flex; align-items:flex-start; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid #334155;\">
+            <div style=\"background:#2563EB; color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:12px; margin-right:12px; flex-shrink:0;\">
+                ${idx + 1}
+            </div>
+            <div>
+                <div style=\"color:#F1F5F9; font-weight:500; font-size:14px; margin-bottom:4px; text-transform:capitalize;\">${step.instruction}</div>
+                <div style=\"color:#94A3B8; font-size:12px;\"><i class=\"fas fa-location-arrow\"></i> ${step.distance}</div>
+            </div>
+        </div>
+    `).join('');
+    
+    const panelHtml = `
+        <div id=\"gps-steps-panel\" class=\"sidebar-panel\" style=\"margin-top: 20px; animation: slideIn 0.3s ease;\">
+            <div class=\"panel-header\">
+                <h3><i class=\"fas fa-compass\" style=\"color:#3B82F6; margin-right:8px;\"></i> Live GPS Navigation</h3>
+            </div>
+            <div class=\"steps-list\" style=\"max-height:300px; overflow-y:auto; padding-right:5px; margin-top:15px;\">
+                ${stepsHtml}
+            </div>
+        </div>
+    `;
+    
+    sidebar.insertAdjacentHTML('beforeend', panelHtml);
 }
 
 function clearCurrentRoutes() {
