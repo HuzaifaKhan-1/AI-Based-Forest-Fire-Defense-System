@@ -1880,59 +1880,6 @@ def start_realtime():
             'error': str(e)
         }), 500
 
-@app.route('/api/ml/dispatch-agent', methods=['POST'])
-def dispatch_agent_action():
-    """Emergency dispatch AI agent endpoint"""
-    try:
-        data = request.get_json()
-        print(f"AI Agent Request Received: {data}")
-        
-        phone = data.get('phone', 'YOUR_NUMBER')
-        location = data.get('location', 'Unknown Region')
-        severity = data.get('severity', 'High')
-        risk_level = data.get('risk_level', 0)
-        lat = data.get('lat', 30.31)
-        lng = data.get('lng', 78.03)
-        
-        # Initialize dispatcher
-        dispatcher = AIAgentDispatcher()
-        
-        # Send SMS
-        sms_success, sms_info = dispatcher.send_emergency_sms(phone, location, severity, risk_level, lat, lng)
-        
-        if not sms_success:
-            print(f"Twilio Error: {sms_info}")
-        else:
-            print(f"SMS Sent Successfully! ID: {sms_info}")
-        
-        # Navigation link for logs
-        nav_url = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}"
-        
-        # Generate simulation logs for the AI Agent
-        logs = [
-            f"Analyzing risk patterns for {location}...",
-            f"Detected {severity} intensity fire spread.",
-            f"GPS Coordinates: {lat}, {lng}",
-            f"Calculating shortest path for emergency vehicles...",
-            f"Direct Route Link generated: {nav_url}",
-            f"Emergency dispatch protocol SMS-{sms_info} initiated.",
-            "SMS notification broadcasted to regional responders.",
-            "Autonomous status: Dispatched and Monitoring."
-        ]
-        
-        return jsonify({
-            'success': sms_success,
-            'info': sms_info,
-            'agent_logs': logs,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
 if __name__ == '__main__':
     # Start real-time predictions automatically
     real_time_predictor.start_continuous_prediction()

@@ -9,6 +9,164 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* ── Prevent all horizontal scroll ──────────────────────────── */
+        html, body { overflow-x: hidden !important; }
+        .section { overflow-x: hidden !important; }
+
+        /* ── Resource Optimization: 2-col sidebar + map ─────────────── */
+        .resource-optimization-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr 1fr;
+            grid-template-rows: auto;
+            gap: 20px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        @media (max-width: 1200px) {
+            .resource-optimization-layout {
+                grid-template-columns: 280px 1fr;
+            }
+            .deployment-map-container {
+                grid-column: 1 / -1;
+            }
+        }
+        @media (max-width: 768px) {
+            .resource-optimization-layout { grid-template-columns: 1fr; }
+        }
+
+        /* ── Resource Config Panel ───────────────────────────────────── */
+        .resource-config-panel {
+            background: rgba(15,23,42,0.9);
+            border: 1px solid rgba(16,185,129,0.25);
+            border-radius: 18px;
+            padding: 22px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            min-width: 0;
+        }
+        .resource-inputs { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
+        .resource-input-group {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(30,41,59,0.6);
+            border: 1px solid rgba(51,65,85,0.6);
+            border-radius: 10px; padding: 10px 14px;
+        }
+        .resource-input-group label {
+            flex: 1; color: #CBD5E1; font-size: 13px; font-weight: 500;
+            display: flex; align-items: center; gap: 8px; white-space: nowrap;
+        }
+        .resource-input-group input[type="number"] {
+            width: 70px; padding: 6px 8px; background: rgba(15,23,42,0.8);
+            border: 1px solid rgba(16,185,129,0.3); border-radius: 7px;
+            color: #F8FAFC; font-size: 14px; font-weight: 600; text-align: center;
+        }
+        .unit-label { color: #64748b; font-size: 11px; white-space: nowrap; }
+
+        /* ── Optimization Results Panel ──────────────────────────────── */
+        .optimization-results {
+            background: rgba(15,23,42,0.9);
+            border: 1px solid rgba(59,130,246,0.2);
+            border-radius: 18px; padding: 22px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box; min-width: 0;
+            overflow-y: auto; max-height: 90vh;
+        }
+        .metrics-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 12px; margin: 16px 0;
+        }
+        .metric-card {
+            background: rgba(30,41,59,0.6);
+            border: 1px solid rgba(51,65,85,0.5);
+            border-radius: 12px; padding: 14px;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .metric-icon {
+            width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0;
+            background: linear-gradient(135deg,#10B981,#059669);
+            display: flex; align-items: center; justify-content: center; color: white;
+        }
+        .metric-value { font-size: 18px; font-weight: 700; color: #10B981; display: block; }
+        .metric-label { font-size: 11px; color: #94A3B8; display: block; }
+        .optimization-score { display: flex; align-items: center; gap: 8px; }
+        .score-label { color: #94A3B8; font-size: 13px; }
+        .score-value { color: #10B981; font-weight: 700; font-size: 18px; }
+        .deployment-breakdown { margin-top: 16px; }
+        .deployment-breakdown h4, .optimization-recommendations h4 {
+            color: #CBD5E1; font-size: 14px; margin-bottom: 10px; font-weight: 600;
+        }
+        .resource-breakdown-grid { display: flex; flex-direction: column; gap: 8px; }
+        .optimization-recommendations { margin-top: 16px; }
+        .recommendations-list { display: flex; flex-direction: column; gap: 8px; }
+        .recommendation-item {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 10px 14px; background: rgba(30,41,59,0.5);
+            border: 1px solid rgba(51,65,85,0.4); border-radius: 10px;
+            color: #CBD5E1; font-size: 13px;
+        }
+        .recommendation-item.placeholder { color: #64748b; }
+        .recommendation-item i { color: #F59E0B; margin-top: 2px; flex-shrink: 0; }
+
+        /* ── Deployment Map ───────────────────────────────────────────── */
+        .deployment-map-container {
+            background: rgba(15,23,42,0.9);
+            border: 1px solid rgba(99,102,241,0.2);
+            border-radius: 18px; padding: 22px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box; min-width: 0;
+        }
+        #deployment-map { width: 100%; height: 420px; border-radius: 12px; }
+        .map-legend { display: flex; gap: 14px; flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94A3B8; }
+        .legend-color { width: 12px; height: 12px; border-radius: 50%; }
+        .legend-color.firefighters { background: #EF4444; }
+        .legend-color.water-tanks  { background: #3B82F6; }
+        .legend-color.drones       { background: #8B5CF6; }
+        .legend-color.helicopters  { background: #F59E0B; }
+
+        /* ── Quantum Panel: fix overflow + button z-index ─────────────── */
+        .quantum-engine-panel {
+            overflow: visible !important;
+        }
+        .quantum-engine-panel > div[style*="position:absolute"] {
+            pointer-events: none !important;
+            z-index: 0 !important;
+        }
+        #run-quantum-btn {
+            position: relative !important;
+            z-index: 10 !important;
+        }
+
+        /* ── Evacuation layout fix ────────────────────────────────────── */
+        .evacuation-layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 20px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .evacuation-map-container {
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        .evacuation-sidebar {
+            min-width: 0;
+            box-sizing: border-box;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .evacuation-map {
+            width: 100% !important;
+            height: 500px;
+        }
+        @media (max-width: 900px) {
+            .evacuation-layout { grid-template-columns: 1fr; }
+            .evacuation-sidebar { max-height: none; }
+        }
+    </style>
 </head>
 <body>
     <!-- Left Sidebar Navigation -->
@@ -219,6 +377,99 @@
                             <div class="recommendation-item placeholder">
                                 <i class="fas fa-lightbulb"></i>
                                 <span>Run optimization to get AI-powered recommendations</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════════════ -->
+                    <!-- QUANTUM DISPATCH ENGINE PANEL                          -->
+                    <!-- ═══════════════════════════════════════════════════════ -->
+                    <div class="quantum-engine-panel" id="quantum-engine-panel" style="
+                        margin-top: 24px;
+                        background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+                        border: 1px solid #6366f1;
+                        border-radius: 16px;
+                        padding: 24px;
+                        position: relative;
+                        overflow: hidden;
+                    ">
+                        <!-- Animated quantum background -->
+                        <div style="position:absolute;inset:0;opacity:0.06;background:repeating-linear-gradient(90deg,#6366f1 0,#6366f1 1px,transparent 0,transparent 50%),repeating-linear-gradient(180deg,#6366f1 0,#6366f1 1px,transparent 0,transparent 50%);background-size:24px 24px;pointer-events:none;"></div>
+
+                        <!-- Header -->
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;position:relative;">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <div style="width:40px;height:40px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(99,102,241,0.5);">
+                                    <i class="fas fa-atom" style="color:white;font-size:18px;"></i>
+                                </div>
+                                <div>
+                                    <h3 style="margin:0;color:#e2e8f0;font-size:16px;font-weight:700;">Quantum Dispatch Engine</h3>
+                                    <p style="margin:0;color:#818cf8;font-size:12px;">QAOA · 8 Qubits · p=2 Layers</p>
+                                </div>
+                            </div>
+                            <span id="quantum-status-badge" style="background:#1e293b;color:#64748b;border:1px solid #334155;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;">IDLE</span>
+                        </div>
+
+                        <!-- Trigger Button -->
+                        <button id="run-quantum-btn" onclick="runQuantumOptimization()" style="
+                            width:100%;padding:14px;
+                            background:linear-gradient(135deg,#6366f1,#8b5cf6);
+                            color:white;border:none;border-radius:10px;
+                            font-size:14px;font-weight:700;cursor:pointer;
+                            display:flex;align-items:center;justify-content:center;gap:10px;
+                            transition:all 0.3s;box-shadow:0 0 20px rgba(99,102,241,0.3);
+                            margin-bottom:20px;
+                        " onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <i class="fas fa-atom"></i>
+                            Run QAOA Circuit Optimization
+                        </button>
+
+                        <!-- Quantum Circuit Diagram -->
+                        <div id="quantum-circuit-display" style="display:none;">
+
+                            <!-- Performance Comparison -->
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px;">
+                                <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px;text-align:center;">
+                                    <div style="font-size:20px;font-weight:800;color:#6366f1;" id="q-solve-time">3ms</div>
+                                    <div style="font-size:10px;color:#64748b;margin-top:2px;">Quantum Time</div>
+                                </div>
+                                <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px;text-align:center;">
+                                    <div style="font-size:20px;font-weight:800;color:#f59e0b;" id="q-classical-time">--</div>
+                                    <div style="font-size:10px;color:#64748b;margin-top:2px;">Classical Time</div>
+                                </div>
+                                <div style="background:#0f172a;border:1px solid #22c55e;border-radius:10px;padding:12px;text-align:center;">
+                                    <div style="font-size:20px;font-weight:800;color:#22c55e;" id="q-speedup">--</div>
+                                    <div style="font-size:10px;color:#64748b;margin-top:2px;">Quantum Speedup</div>
+                                </div>
+                            </div>
+
+                            <!-- Live Quantum Circuit SVG -->
+                            <div style="background:#0a0f1e;border:1px solid #1e293b;border-radius:10px;padding:16px;margin-bottom:18px;">
+                                <div style="font-size:11px;color:#6366f1;font-weight:600;margin-bottom:10px;letter-spacing:1px;">⚛ QAOA QUANTUM CIRCUIT</div>
+                                <canvas id="quantum-circuit-canvas" width="420" height="140" style="width:100%;border-radius:6px;"></canvas>
+                            </div>
+
+                            <!-- Qubit State Display -->
+                            <div style="margin-bottom:18px;">
+                                <div style="font-size:11px;color:#818cf8;font-weight:600;margin-bottom:8px;letter-spacing:1px;">OPTIMAL BIT-STRING (QUBO SOLUTION)</div>
+                                <div id="qubit-display" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+                            </div>
+
+                            <!-- Zone Deployment Tiles -->
+                            <div>
+                                <div style="font-size:11px;color:#818cf8;font-weight:600;margin-bottom:8px;letter-spacing:1px;">QUANTUM-OPTIMIZED ZONE DEPLOYMENT</div>
+                                <div id="quantum-zones-list" style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;padding-right:4px;"></div>
+                            </div>
+
+                            <!-- Confidence -->
+                            <div style="margin-top:16px;padding:12px;background:#0f172a;border-radius:10px;border:1px solid #1e293b;display:flex;align-items:center;gap:12px;">
+                                <div style="flex:1;">
+                                    <div style="font-size:11px;color:#64748b;margin-bottom:4px;">Optimization Score</div>
+                                    <div style="height:6px;background:#1e293b;border-radius:3px;overflow:hidden;">
+                                        <div id="quantum-score-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#22c55e);transition:width 1.2s ease;border-radius:3px;"></div>
+                                    </div>
+                                </div>
+                                <div id="quantum-score-text" style="font-size:22px;font-weight:800;color:#22c55e;min-width:52px;text-align:right;">--</div>
                             </div>
                         </div>
                     </div>

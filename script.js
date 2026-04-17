@@ -7362,7 +7362,7 @@ async function runResourceOptimization() {
         }
     } catch (error) {
         console.warn('ML API unavailable, using fallback optimization');
-        const fallbackOptimization = generateFallbackOptimization();
+        const fallbackOptimization = generateFallbackOptimization(firefighters, waterTanks, drones, helicopters);
         currentOptimization = fallbackOptimization;
         displayOptimizationResults(fallbackOptimization);
         updateDeploymentMap(fallbackOptimization.deployment_plan);
@@ -7489,9 +7489,22 @@ function updateDeploymentMap(deploymentPlan) {
         helicopters: 'fas fa-plane'
     };
 
+    const offsets = {
+        firefighters: [0, 0],
+        water_tanks: [0.008, 0.008],
+        drones: [-0.008, 0.008],
+        helicopters: [0.008, -0.008]
+    };
+
     Object.entries(deploymentPlan).forEach(([resourceType, deployments]) => {
         deployments.forEach(deployment => {
-            const marker = L.marker(deployment.coordinates, {
+            const offset = offsets[resourceType] || [0, 0];
+            const adjustedCoords = [
+                deployment.coordinates[0] + offset[0],
+                deployment.coordinates[1] + offset[1]
+            ];
+
+            const marker = L.marker(adjustedCoords, {
                 icon: L.divIcon({
                     className: 'deployment-marker',
                     html: `
@@ -7506,7 +7519,7 @@ function updateDeploymentMap(deploymentPlan) {
             }).addTo(deploymentMap);
 
             // Add coverage circle
-            const coverageCircle = L.circle(deployment.coordinates, {
+            const coverageCircle = L.circle(adjustedCoords, {
                 color: resourceColors[resourceType],
                 fillColor: resourceColors[resourceType],
                 fillOpacity: 0.1,
@@ -7515,12 +7528,12 @@ function updateDeploymentMap(deploymentPlan) {
             }).addTo(deploymentMap);
 
             marker.bindPopup(`
-                <div>
-                    <h4>${deployment.district}</h4>
-                    <p><strong>Resource:</strong> ${resourceType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-                    <p><strong>Units:</strong> ${deployment.units}</p>
-                    <p><strong>Risk Score:</strong> ${(deployment.risk_score * 100).toFixed(1)}%</p>
-                    <p><strong>Coverage:</strong> ${deployment.coverage_radius} km radius</p>
+                <div style="color: #1a202c;">
+                    <h4 style="margin: 0 0 5px 0; color: ${resourceColors[resourceType]}">${deployment.district}</h4>
+                    <p style="margin: 2px 0;"><strong>Resource:</strong> ${resourceType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                    <p style="margin: 2px 0;"><strong>Units:</strong> ${deployment.units}</p>
+                    <p style="margin: 2px 0;"><strong>Risk Score:</strong> ${(deployment.risk_score * 100).toFixed(1)}%</p>
+                    <p style="margin: 2px 0;"><strong>Coverage:</strong> ${deployment.coverage_radius} km radius</p>
                 </div>
             `);
 
@@ -7570,25 +7583,26 @@ function addDistrictBoundaries() {
     });
 }
 
-function generateFallbackOptimization() {
+function generateFallbackOptimization(ff, wt, dr, hc) {
     // Fallback optimization when ML API is unavailable
+    // Proportional distribution for demo purposes
     return {
         deployment_plan: {
             firefighters: [
-                { district: 'Nainital', coordinates: [29.3806, 79.4422], units: 3, risk_score: 0.85, coverage_radius: 5 },
-                { district: 'Almora', coordinates: [29.6500, 79.6667], units: 2, risk_score: 0.68, coverage_radius: 5 }
+                { district: 'Nainital', coordinates: [29.3806, 79.4422], units: Math.max(1, Math.floor(ff * 0.6)), risk_score: 0.85, coverage_radius: 5 },
+                { district: 'Almora', coordinates: [29.6500, 79.6667], units: Math.max(1, Math.floor(ff * 0.4)), risk_score: 0.68, coverage_radius: 5 }
             ],
             water_tanks: [
-                { district: 'Nainital', coordinates: [29.3806, 79.4422], units: 2, risk_score: 0.85, coverage_radius: 3 },
-                { district: 'Dehradun', coordinates: [30.3165, 78.0322], units: 1, risk_score: 0.42, coverage_radius: 3 }
+                { district: 'Nainital', coordinates: [29.3806, 79.4422], units: Math.max(1, Math.floor(wt * 0.7)), risk_score: 0.85, coverage_radius: 3 },
+                { district: 'Dehradun', coordinates: [30.3165, 78.0322], units: Math.max(1, Math.floor(wt * 0.3)), risk_score: 0.42, coverage_radius: 3 }
             ],
             drones: [
-                { district: 'Nainital', coordinates: [29.3806, 79.4422], units: 1, risk_score: 0.85, coverage_radius: 15 },
-                { district: 'Almora', coordinates: [29.6500, 79.6667], units: 1, risk_score: 0.68, coverage_radius: 15 },
-                { district: 'Chamoli', coordinates: [30.4000, 79.3200], units: 1, risk_score: 0.72, coverage_radius: 15 }
+                { district: 'Nainital', coordinates: [29.3806, 79.4422], units: Math.max(1, Math.floor(dr * 0.4)), risk_score: 0.85, coverage_radius: 15 },
+                { district: 'Almora', coordinates: [29.6500, 79.6667], units: Math.max(1, Math.floor(dr * 0.3)), risk_score: 0.68, coverage_radius: 15 },
+                { district: 'Chamoli', coordinates: [30.4000, 79.3200], units: Math.max(1, Math.floor(dr * 0.3)), risk_score: 0.72, coverage_radius: 15 }
             ],
             helicopters: [
-                { district: 'Nainital', coordinates: [29.3806, 79.4422], units: 1, risk_score: 0.85, coverage_radius: 50 }
+                { district: 'Nainital', coordinates: [29.3806, 79.4422], units: Math.max(1, hc), risk_score: 0.85, coverage_radius: 50 }
             ]
         },
         coverage_metrics: {
@@ -8149,68 +8163,3 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
-
-/**
- * AI AGENT SYSTEM - Autonomous Dispatch & Emergency Response
- */
-
-// Function to trigger the AI Agent (to be called from simulation)
-async function triggerAIAgent(locationName, severity, riskLevel, lat = 30.31, lng = 78.03) {
-    const logContainer = document.getElementById('ai-agent-logs');
-    const statusText = document.getElementById('agent-status-text');
-    const phoneInput = document.getElementById('agent-phone');
-    const phone = phoneInput ? phoneInput.value : '';
-
-    if (!logContainer || !statusText) return;
-
-    // Update status to active
-    statusText.innerText = "AGENT DISPATCHING";
-    const statusDot = statusText.parentElement.querySelector('.status-dot');
-    if (statusDot) statusDot.className = 'status-dot red pulse';
-
-    logContainer.innerHTML = ''; // Clear old logs
-
-    try {
-        const response = await fetch(`${ML_API_BASE}/api/ml/dispatch-agent`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                phone: phone,
-                location: locationName,
-                severity: severity,
-                risk_level: riskLevel,
-                lat: lat,
-                lng: lng
-            })
-        });
-
-        const data = await response.json();
-
-        // Show logs with typewriter effect for demo impact
-        for (const log of data.agent_logs) {
-            const logEntry = document.createElement('p');
-            logEntry.className = 'agent-log-entry';
-            const time = new Date().toLocaleTimeString();
-            logEntry.innerHTML = `<span class="timestamp">[${time}]</span> ${log}`;
-            logContainer.appendChild(logEntry);
-            logContainer.scrollTop = logContainer.scrollHeight;
-            await new Promise(resolve => setTimeout(resolve, 1200));
-        }
-
-        showToast('AI Agent successfully dispatched responders', 'success');
-        
-        statusText.innerText = "RESPONSE ACTIVE";
-        const finalStatusDot = statusText.parentElement.querySelector('.status-dot');
-        if (finalStatusDot) finalStatusDot.className = 'status-dot orange';
-
-    } catch (error) {
-        console.error('AI Agent Error:', error);
-        showToast('AI Agent encountered a communication error', 'error');
-        statusText.innerText = "AGENT ERROR";
-    }
-}
-
-// Manual demo function for the jury
-function triggerAIAgentDemo() {
-    triggerAIAgent("Nainital High-Risk Zone", "CRITICAL", 98);
-}
