@@ -47,15 +47,8 @@ class AIAgentDispatcher:
         # Generate Google Maps direction link (Shortest Path from responder location)
         nav_link = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}"
         
-        body = (
-            f"⚠️ FOREST FIRE EMERGENCY ⚠️\n\n"
-            f"An active fire has been detected by the AI Agent.\n\n"
-            f"📍 Location: {location}\n"
-            f"🔥 Intensity: {severity}\n"
-            f"⏰ Time: {datetime.now().strftime('%I:%M %p')}\n\n"
-            f"🗺️ Navigate to Fire (Shortest Path):\n{nav_link}\n\n"
-            f"Status: IMMEDIATE RESPONSE REQUIRED"
-        )
+        # Reduced length and removed emojis to avoid Twilio Trial Account limit (Error 30044)
+        body = f"FIRE ALERT: {severity} at {location}. Nav: {nav_link}"
         
         if self.client:
             try:
@@ -156,8 +149,50 @@ class RealTimePredictor:
             'vegetation_density': np.random.choice(['moderate', 'dense', 'sparse'], p=[0.5, 0.3, 0.2])
         }
 
-# Initialize real-time predictor
+# Initialize real-time predictor and AI Dispatcher
 real_time_predictor = RealTimePredictor()
+ai_dispatcher = AIAgentDispatcher()
+
+@app.route('/api/ml/dispatch', methods=['POST'])
+def dispatch_emergency_agent():
+    """Trigger AI Dispatcher for emergency response"""
+    try:
+        data = request.get_json()
+        
+        to_number = data.get('phone', '+91XXXXXXXXXX')
+        location = data.get('location', 'Nainital District, Uttarakhand')
+        severity = data.get('severity', 'CRITICAL')
+        risk_level = data.get('risk_level', 'Very High')
+        lat = data.get('lat', 29.39)
+        lng = data.get('lng', 79.45)
+        
+        # Send SMS via AI Agent
+        success, message_id = ai_dispatcher.send_emergency_sms(
+            to_number=to_number,
+            location=location,
+            severity=severity,
+            risk_level=risk_level,
+            lat=lat,
+            lng=lng
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f"Emergency protocol activated! SMS dispatched successfully. ID: {message_id}",
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f"Failed to dispatch SMS: {message_id}"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/ml/predict', methods=['POST'])
 def predict_fire_risk():

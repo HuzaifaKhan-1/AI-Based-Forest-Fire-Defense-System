@@ -9,7 +9,7 @@ let fireSpreadLayers = [];
 let deploymentLayers = [];
 
 // ML API endpoints
-const ML_API_BASE = window.location.origin.replace(':5000', ':5001');
+const ML_API_BASE = `${window.location.protocol}//${window.location.hostname}:5001`;
 let mlPredictions = {};
 let realTimeUpdates = false;
 let currentOptimization = null;
@@ -8443,4 +8443,111 @@ function drawQuantumCircuit(q) {
         ctx.textAlign = 'left';
         ctx.fillText('M', W - 16, y + 3);
     }
+}
+
+// AI Agent Integrations
+function addAIConsoleLog(message, type) {
+    const logsContainer = document.getElementById('ai-agent-logs');
+    if (!logsContainer) return;
+    
+    // Remove placeholder if present
+    const placeholder = logsContainer.querySelector('.console-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+    
+    const logEntry = document.createElement('p');
+    const timestamp = new Date().toLocaleTimeString();
+    
+    let color = '#ccc';
+    if (type === 'success') color = '#4caf50';
+    if (type === 'error') color = '#f44336';
+    if (type === 'info') color = '#2196f3';
+    if (type === 'warning') color = '#ff9800';
+    
+    logEntry.style.color = color;
+    logEntry.style.margin = '5px 0';
+    logEntry.style.fontFamily = 'monospace';
+    logEntry.innerHTML = `<span style="color:#888">[${timestamp}]</span> ${message}`;
+    
+    logsContainer.appendChild(logEntry);
+    logsContainer.scrollTop = logsContainer.scrollHeight;
+}
+
+async function triggerAIAgentDemo() {
+    const phoneInput = document.getElementById('agent-phone');
+    const statusText = document.getElementById('agent-status-text');
+    const statusDot = document.querySelector('.agent-status-badge .status-dot');
+    
+    if (!phoneInput) return;
+    
+    const phoneNumber = phoneInput.value.trim();
+    if (!phoneNumber || phoneNumber === '+91') {
+        addAIConsoleLog('> ERROR: Please enter a valid phone number', 'error');
+        if (typeof showToast === 'function') showToast('Please enter a valid phone number', 'error');
+        return;
+    }
+    
+    // Update UI status
+    if (statusText) statusText.textContent = 'AGENT DISPATCHING...';
+    if (statusDot) {
+        statusDot.style.background = '#ff9800';
+        statusDot.style.boxShadow = '0 0 8px #ff9800';
+    }
+    
+    addAIConsoleLog('> INITIATING CRITICAL DISPATCH PROTOCOL', 'warning');
+    addAIConsoleLog(`> Target Responder: ${phoneNumber}`, 'info');
+    addAIConsoleLog('> Connecting to ML backend...', 'info');
+    
+    try {
+        const response = await fetch(`${ML_API_BASE}/api/ml/dispatch`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                phone: phoneNumber,
+                location: 'Nainital District, Uttarakhand',
+                severity: 'CRITICAL',
+                risk_level: 'Very High',
+                lat: 29.39,
+                lng: 79.45
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            addAIConsoleLog(`> SUCCESS: ${data.message}`, 'success');
+            if (typeof showToast === 'function') showToast('Emergency SMS Dispatched Successfully!', 'success');
+            
+            if (statusText) statusText.textContent = 'DISPATCH COMPLETE';
+            if (statusDot) {
+                statusDot.style.background = '#4caf50';
+                statusDot.style.boxShadow = '0 0 8px #4caf50';
+            }
+        } else {
+            throw new Error(data.error || 'Server returned an error');
+        }
+    } catch (error) {
+        addAIConsoleLog(`> ERROR: Dispatch failed. ${error.message}`, 'error');
+        if (typeof showToast === 'function') showToast('Failed to dispatch emergency agent', 'error');
+        
+        if (statusText) statusText.textContent = 'DISPATCH FAILED';
+        if (statusDot) {
+            statusDot.style.background = '#f44336';
+            statusDot.style.boxShadow = '0 0 8px #f44336';
+        }
+    }
+    
+    // Reset status after a delay
+    setTimeout(() => {
+        if (statusText && (statusText.textContent === 'DISPATCH COMPLETE' || statusText.textContent === 'DISPATCH FAILED')) {
+            statusText.textContent = 'AGENT STANDBY';
+            if (statusDot) {
+                statusDot.style.background = '';
+                statusDot.style.boxShadow = '';
+            }
+        }
+    }, 5000);
 }
