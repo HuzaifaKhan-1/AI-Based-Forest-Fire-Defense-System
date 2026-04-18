@@ -167,7 +167,7 @@ def dispatch_emergency_agent():
         lng = data.get('lng', 79.45)
         
         # Send SMS via AI Agent
-        success, message_id = ai_dispatcher.send_emergency_sms(
+        sms_success, sms_id = ai_dispatcher.send_emergency_sms(
             to_number=to_number,
             location=location,
             severity=severity,
@@ -176,10 +176,19 @@ def dispatch_emergency_agent():
             lng=lng
         )
         
-        if success:
+        # ALSO Place an automated emergency voice call to bypass Indian Telecom DLT SMS filters!
+        call_success, call_id = ai_dispatcher.make_emergency_call(
+            to_number=to_number,
+            location=location,
+            severity=severity,
+            lat=lat,
+            lng=lng
+        )
+        
+        if sms_success or call_success:
             return jsonify({
                 'success': True,
-                'message': f"Emergency protocol activated! SMS dispatched successfully. ID: {message_id}",
+                'message': f"Emergency protocol activated! SMS Sent, Calling Phone Now...",
                 'timestamp': datetime.now().isoformat()
             })
         else:
