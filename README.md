@@ -40,8 +40,7 @@ This project is designed to **predict, simulate, monitor, and assist evacuation*
   <img width="1537" height="807" alt="image" src="https://github.com/user-attachments/assets/122bd8d2-e5fe-44cd-936a-0f4a15d8fede" />
 
 ### Real-Time Evacuation Planning System
-  <img width="1590" height="853" alt="image" src="https://github.com/user-attachments/assets/7fc91641-8174-4224-bf9a-2117ce04952e" />
-
+  <img width="1419" height="846" alt="image" src="https://github.com/user-attachments/assets/9707f8da-8aed-44c8-8863-4cc88b49e1b6" />
 
 
 ### 🔔 Monitoring & Alerts  
