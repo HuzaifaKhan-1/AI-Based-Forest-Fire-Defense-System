@@ -9,7 +9,7 @@ let fireSpreadLayers = [];
 let deploymentLayers = [];
 
 // ML API endpoints
-const ML_API_BASE = 'http://localhost:5001';
+const ML_API_BASE = window.location.origin.replace(':5000', ':5001');
 let mlPredictions = {};
 let realTimeUpdates = false;
 let currentOptimization = null;
@@ -1365,18 +1365,6 @@ async function startFireSimulation(latlng) {
         })
     }).addTo(simulationMap);
 
-    // Add popup with Live Location Link for the responder
-    const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${latlng.lat},${latlng.lng}`;
-    fireMarker.bindPopup(`
-        <div class="fire-popup" style="padding: 10px; min-width: 150px;">
-            <strong style="color: #ff4444; font-size: 14px;">🔥 CRITICAL FIRE</strong><br>
-            <span style="font-size: 11px; color: #666;">Coord: ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}</span><br>
-            <a href="${navUrl}" target="_blank" style="display: block; margin-top: 10px; padding: 8px; background: #2563eb; color: white; border-radius: 4px; text-decoration: none; font-size: 12px; text-align: center; font-weight: bold;">
-                <i class="fas fa-directions"></i> Get Shortest Path
-            </a>
-        </div>
-    `).openPopup();
-
     fireSpreadLayers.push(fireMarker);
 
     // Store ML simulation data if available
@@ -1395,13 +1383,6 @@ async function startFireSimulation(latlng) {
     }).addTo(simulationMap);
 
     fireSpreadLayers.push(initialBurn);
-    
-    // Automatically trigger AI Defense Agent after 3 seconds of "detection"
-    setTimeout(() => {
-        const locationName = mlSimulation ? mlSimulation.location_name : "Central Forest Sector";
-        const riskLevel = mlSimulation ? mlSimulation.overall_risk * 100 : 85;
-        triggerAIAgent(locationName, "CRITICAL", Math.round(riskLevel), latlng.lat, latlng.lng);
-    }, 3000);
 }
 
 function startSimulation() {
@@ -8163,3 +8144,303 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// QUANTUM DISPATCH ENGINE — QAOA Resource Optimization
+// ═══════════════════════════════════════════════════════════════════════
+
+async function runQuantumOptimization() {
+    const btn = document.getElementById('run-quantum-btn');
+    const badge = document.getElementById('quantum-status-badge');
+    const display = document.getElementById('quantum-circuit-display');
+
+    // Collect current resource counts from the existing form inputs
+    const firefighters = parseInt(document.getElementById('firefighters-count')?.value || 50);
+    const waterTanks   = parseInt(document.getElementById('water-tanks-count')?.value || 20);
+    const drones       = parseInt(document.getElementById('drones-count')?.value || 15);
+    const helicopters  = parseInt(document.getElementById('helicopters-count')?.value || 8);
+
+    // Animate button to processing state
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Quantum Circuit...';
+    btn.style.background = 'linear-gradient(135deg,#374151,#4b5563)';
+    btn.disabled = true;
+
+    if (badge) {
+        badge.textContent = 'RUNNING';
+        badge.style.background = '#1e1b4b';
+        badge.style.color = '#818cf8';
+        badge.style.border = '1px solid #6366f1';
+    }
+
+    showToast('⚛ Initializing QAOA quantum circuit...', 'processing', 3000);
+
+    try {
+        const response = await fetch('http://localhost:5001/api/quantum/optimize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                firefighters,
+                water_tanks: waterTanks,
+                drones,
+                helicopters,
+                fire_intensity: 68,
+                wind_speed: 18,
+                humidity: 45
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            renderQuantumResults(result);
+            showToast('✅ QAOA circuit solved — optimal deployment computed!', 'success', 4000);
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (err) {
+        // Graceful offline demo fallback
+        console.warn('Backend offline — using demo data:', err.message);
+        const demoData = buildQuantumDemoData(firefighters, waterTanks, drones, helicopters);
+        renderQuantumResults(demoData);
+        showToast('⚛ QAOA circuit solved (demo mode)', 'success', 4000);
+    } finally {
+        btn.innerHTML = '<i class="fas fa-redo"></i> Re-run Quantum Optimization';
+        btn.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)';
+        btn.disabled = false;
+    }
+}
+
+function buildQuantumDemoData(ff, wt, dr, hc) {
+    const zones = ['Northern Sector','Eastern Ridge','Southern Valley',
+                   'Fire Perimeter α','Evacuation Corridor'];
+    return {
+        quantum: {
+            n_qubits: 8, p_layers: 2,
+            optimal_gamma: 1.0472, optimal_beta: 0.7854,
+            optimal_energy: -3.1416,
+            best_bit_string: '10110101',
+        },
+        optimization: {
+            score: 87.4,
+            active_zones: zones,
+            deployment: zones.map((z, i) => ({
+                zone: z,
+                priority: +(1.0 - i * 0.12).toFixed(2),
+                firefighters: Math.round(ff * (1 - i * 0.1) / zones.length),
+                water_tanks:  Math.round(wt  * (1 - i * 0.1) / zones.length),
+                drones:       Math.round(dr  * (1 - i * 0.1) / zones.length),
+                helicopters:  Math.round(hc  * (1 - i * 0.1) / zones.length),
+                estimated_response_min: +(4 + i * 2.5).toFixed(1)
+            }))
+        },
+        performance: {
+            quantum_solve_time_ms: 3,
+            classical_equivalent_sec: 0.20,
+            quantum_speedup: '68.3x faster',
+            classical_combinations_checked: 256
+        }
+    };
+}
+
+function renderQuantumResults(result) {
+    const display = document.getElementById('quantum-circuit-display');
+    const badge   = document.getElementById('quantum-status-badge');
+    if (!display) return;
+
+    display.style.display = 'block';
+    display.style.animation = 'fadeIn 0.5s ease';
+
+    if (badge) {
+        badge.textContent = 'SOLVED';
+        badge.style.background = '#052e16';
+        badge.style.color = '#22c55e';
+        badge.style.border = '1px solid #22c55e';
+    }
+
+    const perf = result.performance;
+    const q    = result.quantum;
+    const opt  = result.optimization;
+
+    // Performance metrics
+    const classicalSec = perf.classical_equivalent_sec;
+    const classicalText = classicalSec < 1
+        ? `${Math.round(classicalSec * 1000)}ms`
+        : `${classicalSec.toFixed(2)}s`;
+    document.getElementById('q-solve-time').textContent    = `${perf.quantum_solve_time_ms}ms`;
+    document.getElementById('q-classical-time').textContent = classicalText;
+    document.getElementById('q-speedup').textContent        = perf.quantum_speedup;
+
+    // Draw quantum circuit on canvas
+    drawQuantumCircuit(q);
+
+    // Qubit bit-string display
+    const qubitContainer = document.getElementById('qubit-display');
+    if (qubitContainer) {
+        qubitContainer.innerHTML = '';
+        (q.best_bit_string || '10110101').split('').forEach((bit, i) => {
+            const el = document.createElement('div');
+            el.style.cssText = `
+                width:36px;height:36px;border-radius:8px;display:flex;align-items:center;
+                justify-content:center;font-size:16px;font-weight:800;font-family:monospace;
+                ${bit === '1'
+                    ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;box-shadow:0 0 12px rgba(99,102,241,0.5);'
+                    : 'background:#1e293b;color:#475569;border:1px solid #334155;'}
+            `;
+            el.textContent = bit;
+            el.title = `q${i}: |${bit}⟩`;
+            qubitContainer.appendChild(el);
+        });
+    }
+
+    // Zone deployment tiles
+    const zonesList = document.getElementById('quantum-zones-list');
+    const mapPlan = {
+        firefighters: [],
+        water_tanks: [],
+        drones: [],
+        helicopters: []
+    };
+
+    const zoneCoords = {
+        'Northern Sector': [30.3, 79.1],
+        'Eastern Ridge': [29.8, 80.0],
+        'Southern Valley': [29.2, 79.5],
+        'Western Flank': [30.1, 78.2],
+        'Central Command': [29.7, 79.2],
+        'Fire Perimeter α': [29.4, 79.4],
+        'Fire Perimeter β': [29.0, 79.7],
+        'Evacuation Corridor': [30.0, 78.5]
+    };
+
+    if (zonesList && opt.deployment) {
+        zonesList.innerHTML = '';
+        opt.deployment.forEach((zone, i) => {
+            const coords = zoneCoords[zone.zone] || [29.5 + (i*0.1), 79.5 + (i*0.1)];
+            
+            // Collect data for map update
+            if (zone.firefighters > 0) mapPlan.firefighters.push({ district: zone.zone, coordinates: coords, units: zone.firefighters, risk_score: 0.8 - (i*0.05), coverage_radius: 5 });
+            if (zone.water_tanks > 0) mapPlan.water_tanks.push({ district: zone.zone, coordinates: coords, units: zone.water_tanks, risk_score: 0.8 - (i*0.05), coverage_radius: 3 });
+            if (zone.drones > 0) mapPlan.drones.push({ district: zone.zone, coordinates: coords, units: zone.drones, risk_score: 0.8 - (i*0.05), coverage_radius: 12 });
+            if (zone.helicopters > 0) mapPlan.helicopters.push({ district: zone.zone, coordinates: coords, units: zone.helicopters, risk_score: 0.8 - (i*0.05), coverage_radius: 25 });
+
+            const priorityPct = Math.round(zone.priority * 100);
+            const bar = `<div style="height:3px;background:#1e293b;border-radius:2px;margin-top:6px;">
+                <div style="height:100%;width:${priorityPct}%;background:linear-gradient(90deg,#6366f1,#22c55e);border-radius:2px;"></div>
+            </div>`;
+            zonesList.innerHTML += `
+                <div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="color:#e2e8f0;font-size:12px;font-weight:600;">${zone.zone}</span>
+                        <span style="background:#1e1b4b;color:#818cf8;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">Priority ${priorityPct}%</span>
+                    </div>
+                    ${bar}
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px;">
+                        <div style="text-align:center;font-size:10px;color:#64748b;">🧑‍🚒 ${zone.firefighters}</div>
+                        <div style="text-align:center;font-size:10px;color:#64748b;">💧 ${zone.water_tanks}</div>
+                        <div style="text-align:center;font-size:10px;color:#64748b;">🚁 ${zone.drones}</div>
+                        <div style="text-align:center;font-size:10px;color:#64748b;">✈️ ${zone.helicopters}</div>
+                    </div>
+                    <div style="font-size:10px;color:#475569;margin-top:4px;">ETA: ${zone.estimated_response_min} min</div>
+                </div>`;
+        });
+
+        // Trigger Leaflet Map Update with Quantum results
+        updateDeploymentMap(mapPlan);
+    }
+
+    // Score bar
+    const score = opt.score || 87;
+    const scoreBar  = document.getElementById('quantum-score-bar');
+    const scoreText = document.getElementById('quantum-score-text');
+    if (scoreBar)  setTimeout(() => { scoreBar.style.width = `${score}%`; }, 100);
+    if (scoreText) scoreText.textContent = `${score}%`;
+}
+
+function drawQuantumCircuit(q) {
+    const canvas = document.getElementById('quantum-circuit-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const nQubits = q.n_qubits || 8;
+    const nLayers = 6; // H + RZ + CNOT + RX + RZ + RX
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0a0f1e';
+    ctx.fillRect(0, 0, W, H);
+
+    const rowH = H / nQubits;
+    const colW = W / (nLayers + 1);
+
+    // Draw qubit wires
+    for (let i = 0; i < nQubits; i++) {
+        const y = rowH * i + rowH / 2;
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(W - 10, y); ctx.stroke();
+        // Qubit label
+        ctx.fillStyle = '#475569';
+        ctx.font = '10px monospace';
+        ctx.fillText(`q${i}`, 4, y + 4);
+    }
+
+    // Gate drawing helper
+    const drawGate = (label, col, row, color) => {
+        const x = colW * col + colW / 2;
+        const y = rowH * row + rowH / 2;
+        const gw = 28, gh = 20;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(x - gw/2, y - gh/2, gw, gh, 4);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, x, y + 3);
+    };
+
+    const drawCNOT = (col, control, target) => {
+        const x  = colW * col + colW / 2;
+        const yc = rowH * control + rowH / 2;
+        const yt = rowH * target  + rowH / 2;
+        ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, yc); ctx.lineTo(x, yt); ctx.stroke();
+        // Control dot
+        ctx.fillStyle = '#6366f1';
+        ctx.beginPath(); ctx.arc(x, yc, 5, 0, Math.PI * 2); ctx.fill();
+        // Target circle
+        ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x, yt, 8, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x - 8, yt); ctx.lineTo(x + 8, yt); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, yt - 8); ctx.lineTo(x, yt + 8); ctx.stroke();
+    };
+
+    ctx.textBaseline = 'middle';
+
+    // Layer 1: Hadamard gates
+    for (let i = 0; i < nQubits; i++) drawGate('H', 1, i, '#6366f1');
+
+    // Layer 2: RZ gates (gamma)
+    for (let i = 0; i < nQubits; i++) drawGate('RZ', 2, i, '#7c3aed');
+
+    // Layer 3: CNOT entanglers
+    for (let i = 0; i < nQubits - 1; i += 2) drawCNOT(3, i, i + 1);
+
+    // Layer 4: RX gates (beta)
+    for (let i = 0; i < nQubits; i++) drawGate('RX', 4, i, '#2563eb');
+
+    // Layer 5: RZ (second layer)
+    for (let i = 0; i < nQubits; i++) drawGate('RZ', 5, i, '#7c3aed');
+
+    // Layer 6: RX (second layer)
+    for (let i = 0; i < nQubits; i++) drawGate('RX', 6, i, '#2563eb');
+
+    // Measure labels
+    for (let i = 0; i < nQubits; i++) {
+        const y = rowH * i + rowH / 2;
+        ctx.fillStyle = '#22c55e';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('M', W - 16, y + 3);
+    }
+}
